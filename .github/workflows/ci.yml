@@ -38,6 +38,8 @@ jobs:
       - name: Test HAR import in browser parser
         working-directory: frontend
         run: node --test lib/*.test.mjs
+      - name: Validate Chrome extension manifest and script
+        run: python -c "import json; json.load(open('extension/wb-capture/manifest.json'))" && node --check extension/wb-capture/wb-capture.js
       - name: Build Next.js
         working-directory: frontend
         run: npm run build
