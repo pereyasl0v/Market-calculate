@@ -18,6 +18,17 @@ test("Ozon XLSX example reproduces FBO and FBS marketplace expenses", () => {
   assert.equal(Math.round(fbs.payout), 142);
 });
 
+test("Ozon commission uses PCT, PP, Km and Kp formula", () => {
+  const result = calculateOzonScenario({
+    buyerPrice:271,
+    settings:{...OZON_DEFAULTS, priceDiscountPct:10, commissionModifierPct:0, loyaltyPayoutRub:0},
+    scheme:"FBO"
+  });
+  assert.equal(result.kpPct, 10);
+  assert.equal(result.pctl, 301.11);
+  assert.equal(result.commission, 39.14);
+});
+
 test("tax and product cost are deducted after Ozon payout", () => {
   const result = calculateOzonScenario({
     buyerPrice:271, cost:50,
