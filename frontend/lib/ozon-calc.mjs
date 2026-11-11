@@ -3,6 +3,8 @@ export const OZON_DEFAULTS = Object.freeze({
   volumeL: 0,
   weightKg: 0,
   commissionPct: 23,
+  commissionModifierPct: 0,
+  loyaltyPayoutRub: 0,
   acquiringPct: 1,
   fboLogistics: 29,
   fbsLogistics: 29,
@@ -44,7 +46,13 @@ export function calculateOzonScenario({ buyerPrice, cost = 0, settings = {}, sch
   const kr = clamp(s.krPct, 0, 100) / 100;
   const isFbs = scheme === "FBS";
 
-  const commission = sellerPrice * clamp(s.commissionPct, 0, 100) / 100;
+  const pctl = sellerPrice;
+  const nominalRate = clamp(number(s.commissionPct) - number(s.commissionModifierPct), 0, 100) / 100;
+  const kp = pctl > 0
+    ? clamp((pctl - buyer - number(s.loyaltyPayoutRub)) / pctl * 100, 0, 100) / 100
+    : 0;
+  // Official Ozon formula: max(ПЦТ × (ПП−Км) × 1%, ПЦТ × (ПП−Км−Кп)).
+  const commission = Math.max(pctl * nominalRate * 0.01, pctl * Math.max(0, nominalRate - kp));
   const acquiring = sellerPrice * clamp(s.acquiringPct, 0, 100) / 100;
   const handling = isFbs ? number(s.fbsHandling) : 0;
   const logisticsCap = isFbs ? number(s.fbsLogistics) : number(s.fboLogistics);
@@ -62,7 +70,7 @@ export function calculateOzonScenario({ buyerPrice, cost = 0, settings = {}, sch
   const profit = payout - tax - productCost;
 
   return {
-    scheme, buyerPrice: round2(buyer), sellerPrice: round2(sellerPrice),
+    scheme, buyerPrice: round2(buyer), sellerPrice: round2(sellerPrice), pctl: round2(pctl), kpPct: round2(kp * 100),
     commission: round2(commission), acquiring: round2(acquiring),
     handling: round2(handling), logistics: round2(logistics),
     lastMile: round2(lastMile), reverseReserve: round2(reverseReserve),
