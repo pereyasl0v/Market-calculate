@@ -116,7 +116,7 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
 
     <section className="panel">
       <h2>Параметры тарифа и товара Ozon</h2>
-      <p className="muted">Ставки 23%, 1%, 29 ₽, 25 ₽ и 10 ₽ предварительно взяты из твоего XLSX-примера. Комиссия рассчитывается по формуле Ozon через ПЦТ, ПП, Км и Кп. Проверь ставки для своей категории, маршрута, объёма и способа отгрузки.</p>
+      <p className="muted">Ставки 23%, 1%, 29 ₽, 25 ₽ и 10 ₽ предварительно взяты из твоего XLSX-примера. В HTML для большинства категорий на FBO/FBS указаны 17% для товаров до 100 ₽ и 23% для 101–300 ₽; для Fashion есть отдельные условия. Комиссия рассчитывается по формуле Ozon через ПЦТ, ПП, Км и Кп. Проверь ставку по категории и маршруту.</p>
       <div className="grid">
         <TextField label="Категория Ozon" value={input.category} onChange={v=>updateInput({category:v})}/>
         <NumberField label="Объём товара, л" value={input.volumeL} onChange={v=>updateInput({volumeL:v})}/>
