@@ -1,19 +1,25 @@
 """WB search backend. Internal search endpoint is NOT official Seller API."""
 import os
 from typing import Any
-from urllib.parse import urlencode
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-app = FastAPI(title="Market Calculate API", version="0.3.0")
+app = FastAPI(title="Market Calculate API", version="0.4.0")
 origins = [v.strip() for v in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if v.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET"], allow_headers=["*"])
 
-WB_BASE = "https://search.wb.ru"
-WB_PATHS = ("/exactmatch/ru/common/v18/search", "/exactmatch/ru/common/v5/search")
+# The FIRST URL and parameter combination below were observed returning HTTP 200
+# in the user's 2026-11-11 HAR. These are UNDOCUMENTED web-site endpoints.
+# We deliberately do not replay HAR cookies, auth headers or device identifiers.
+WB_SEARCH_TARGETS = (
+    ("https://www.wildberries.ru/__internal/u-search/exactmatch/ru/common/v18/search", "64"),
+    ("https://search.wb.ru/exactmatch/ru/common/v18/search", "1"),
+    ("https://search.wb.ru/exactmatch/ru/common/v5/search", "1"),
+)
+DEFAULT_DESTINATION = int(os.environ.get("WB_DESTINATION", "1259570991"))
 
 
 class Product(BaseModel):
@@ -29,17 +35,23 @@ class Product(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
-    source: str = "unofficial WB site search API"
+    source: str = "unofficial Wildberries site search interface"
     products: list[Product]
     total_returned: int
-    warning: str = "Prices are from search JSON, NOT verified buyer-specific checkout prices or seller payouts."
+    warning: str = (
+        "JSON product price is not guaranteed to match rendered storefront price. "
+        "A supplied HTML snapshot showed 359 RUB in JSON versus 348 RUB in the page. "
+        "Basic price is not the seller's price before SPP; SPP is unknown."
+    )
 
 
 def extract_products(payload: Any) -> list[Product]:
     if not isinstance(payload, dict):
         raise ValueError("WB payload is not an object")
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    cards = data.get("products") or data.get("cards")
+    cards = data.get("products")
+    if cards is None:
+        cards = data.get("cards")
     if not isinstance(cards, list):
         raise ValueError("WB products array missing or schema changed")
     result = []
@@ -95,32 +107,77 @@ async def health():
     return {"status": "ok"}
 
 
+class WBSearchUnavailable(Exception):
+    def __init__(self, attempts: list[str]):
+        self.attempts = attempts
+        super().__init__("WB search unavailable")
+
+
+async def fetch_wb_top10(
+    client: httpx.AsyncClient, query: str, destination: int
+) -> tuple[list[Product], str]:
+    """Try actual site search first; keep errors safe to expose in diagnostics."""
+    attempts: list[str] = []
+    for url, app_type in WB_SEARCH_TARGETS:
+        params = {
+            "appType": app_type,
+            "curr": "rub",
+            "dest": str(destination),
+            "hide_vflags": "4294967296",
+            "inheritFilters": "true",
+            "lang": "ru",
+            "locale": "ru",
+            "query": query,
+            "resultset": "catalog",
+            "sort": "popular",
+            "spp": "30",  # WB search request parameter; NOT observed competitor SPP.
+            "suppressSpellcheck": "false",
+        }
+        try:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            products = extract_products(response.json())
+            if products and any(p.price_rub is not None for p in products):
+                return products, url.split("?")[0]
+            attempts.append(f"{url}: no priced products")
+        except httpx.HTTPStatusError as exc:
+            attempts.append(f"{url}: HTTP {exc.response.status_code}")
+        except httpx.HTTPError as exc:
+            attempts.append(f"{url}: {type(exc).__name__}")
+        except (ValueError, TypeError, KeyError) as exc:
+            attempts.append(f"{url}: invalid JSON/schema ({type(exc).__name__})")
+    raise WBSearchUnavailable(attempts)
+
+
 @app.get("/api/wb/search", response_model=SearchResponse)
 async def wb_search(
     query: str = Query(min_length=2, max_length=150),
-    destination: int = Query(default=-1257786, description="WB destination code; region affects results"),
+    destination: int = Query(
+        default=DEFAULT_DESTINATION, description="WB destination/region (configurable)"
+    ),
 ):
-    params = {
-        "appType": "1", "curr": "rub", "dest": str(destination),
-        "lang": "ru", "page": "1", "query": query,
-        "resultset": "catalog", "sort": "popular", "spp": "30",
-    }
-    errors = []
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(12.0), follow_redirects=False,
-        headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 (compatible; MarketCalculate/0.3)"},
+        timeout=httpx.Timeout(12.0),
+        follow_redirects=False,
+        headers={
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (compatible; MarketCalculate/0.4)",
+            "Referer": "https://www.wildberries.ru/",
+        },
     ) as client:
-        for path in WB_PATHS:
-            try:
-                res = await client.get(f"{WB_BASE}{path}", params=params)
-                res.raise_for_status()
-                parsed = extract_products(res.json())
-                if parsed and any(p.price_rub for p in parsed):
-                    return SearchResponse(query=query, products=parsed, total_returned=len(parsed))
-                errors.append(f"{path}: no usable prices")
-            except (httpx.HTTPError, ValueError) as exc:
-                errors.append(f"{path}: {type(exc).__name__}")
-    raise HTTPException(
-        status_code=502,
-        detail={"message": "WB search temporarily unavailable or payload changed", "attempts": errors},
+        try:
+            products, source = await fetch_wb_top10(client, query, destination)
+        except WBSearchUnavailable as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "WB search temporarily unavailable or payload changed",
+                    "attempts": exc.attempts,
+                },
+            ) from exc
+    return SearchResponse(
+        query=query,
+        products=products,
+        total_returned=len(products),
+        source=source,
     )
