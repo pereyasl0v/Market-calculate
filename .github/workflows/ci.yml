@@ -39,7 +39,7 @@ jobs:
         working-directory: frontend
         run: node --test lib/*.test.mjs
       - name: Validate Chrome extension manifest and script
-        run: python -c "import json; json.load(open('extension/wb-capture/manifest.json'))" && node --check extension/wb-capture/wb-capture.js
+        run: python -c "import json; [json.load(open(p)) for p in ['extension/wb-capture/manifest.json','extension/ozon-capture/manifest.json']]" && node --check extension/wb-capture/wb-capture.js && node --check extension/ozon-capture/ozon-capture.js
       - name: Build Next.js
         working-directory: frontend
         run: npm run build
