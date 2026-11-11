@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Calculate — 1688 → WB / Ozon</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#172033;background:#f4f6fa;font-synthesis:none}*{box-sizing:border-box}body{margin:0}button,input,select,textarea{font:inherit}button{cursor:pointer}header{background:#111b36;color:white;padding:22px max(20px,calc((100vw - 1200px)/2));display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}header b{font-size:23px}header small{display:block;color:#b6c4df;margin-top:5px}main{max-width:1240px;margin:26px auto;padding:0 20px}nav,.subnav{display:flex;gap:9px;margin-bottom:22px;flex-wrap:wrap}.tab{border:1px solid #d9dfec;background:white;border-radius:10px;padding:11px 18px;color:#394562;font-weight:650}.tab.active{color:white;background:#374bc4;border-color:#374bc4}.subnav .tab.active{background:#e9edff;color:#293eaf;border-color:#bbc6ff}.panel{background:white;border:1px solid #e0e5ef;border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 20px #17203308}.panel h2,.panel h3{margin:0 0 16px}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}.muted{color:#6b7790;font-size:13px;line-height:1.55}.formgrid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:14px}label{font-size:13px;font-weight:650;color:#4e5b72;display:block;margin-bottom:6px}input,select,textarea{width:100%;padding:11px 12px;border:1px solid #cfd7e5;border-radius:9px;background:white;color:#18233b;min-width:0}input:focus,select:focus{outline:2px solid #a9b8ff}.btn{border:0;background:#374bc4;color:white;border-radius:9px;padding:11px 15px;font-weight:650}.btn.secondary{background:#eef1fa;color:#354269}.btn.danger{background:#fff0f0;color:#b12626}.btn:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:7px;flex-wrap:wrap}.small{padding:7px 9px;font-size:12px}.tablewrap{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:14px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #e7ebf2}th{color:#60708d;background:#f8faff;font-size:12px}td.num{text-align:right;font-variant-numeric:tabular-nums}td input{padding:8px;min-width:94px}td input.name{min-width:170px}.highlight{font-weight:800;color:#233ab0}.error{color:#b12626}.good{color:#168453}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.metric{background:#f7f9ff;border:1px solid #e0e7fd;border-radius:12px;padding:16px}.metric .label{font-size:12px;color:#66748a}.metric strong{font-size:25px;display:block;margin-top:6px}.metric .detail{font-size:12px;color:#6c7890;margin-top:8px}.notice{background:#fff8e8;border:1px solid #f2dfb7;color:#795b20;border-radius:10px;padding:13px;font-size:13px;line-height:1.55;margin:14px 0}.pricegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.range{display:flex;align-items:center;gap:18px}.range input{flex:1}.range strong{font-size:24px;width:85px;text-align:right}footer{font-size:12px;color:#748098;text-align:center;padding:24px}a{color:#354ac3}@media(max-width:760px){.formgrid,.pricegrid,.metrics{grid-template-columns:1fr 1fr}header{padding:20px}main{padding:0 12px}.panel{padding:15px}}@media(max-width:480px){.formgrid,.pricegrid,.metrics{grid-template-columns:1fr}.row{align-items:stretch} .range{gap:8px}}
+</style>
+</head>
+<body>
+<header><div><b>Market Calculate</b><small>1688 → Wildberries / Ozon · прототип v0.1</small></div><span>Расчёт ниши до закупки</span></header>
+<main>
+<nav id="main-tabs"><button class="tab active" data-page="cost">1. Себестоимость</button><button class="tab" data-page="calc">2. Калькулятор</button></nav>
+<div id="app"></div>
+</main><footer>Все значения комиссий и расходов вводятся пользователем. Приложение не использует неофициальные API.</footer>
+<script>
+(function(){
+"use strict";
+const KEY="market-calculate-v1";
+const initial={items:[],page:"cost",section:"selected",market:"wb",selectedId:"",spp:20,config:{wb:{commission:25,delivery:95,storage:0,advertising:0,other:0,tax:6},ozon:{commission:25,delivery:95,storage:0,advertising:0,other:0,tax:6}},prices:{wb:{},ozon:{}}};
+let state;
+try{const loaded=JSON.parse(localStorage.getItem(KEY)||"null");state=loaded?{...initial,...loaded,config:{...initial.config,...loaded.config},prices:{...initial.prices,...loaded.prices}}:structuredClone(initial)}catch(e){state=structuredClone(initial)}
+const el=document.getElementById("app"), q=s=>document.querySelector(s);
+const money=n=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:2}).format(Number.isFinite(n)?n:0)+" ₽";
+const decimal=v=>{const n=Number(String(v??"").replace(",","."));return Number.isFinite(n)?Math.max(0,n):0};
+const clean=s=>String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+const itemCost=x=>decimal(x.yuan)*decimal(x.rate)+decimal(x.logistics);
+const persist=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){alert("Не удалось сохранить данные браузера. Проверьте доступное место.")}};
+const activeItem=()=>state.items.find(x=>x.id===state.selectedId)||state.items[0]||null;
+const pricesFor=()=>{const id=activeItem()?.id;return (state.prices[state.market]||{})[id]||Array(10).fill("")};
+const analytics=()=>{const p=pricesFor().map(decimal).filter(x=>x>0).sort((a,b)=>a-b);if(!p.length)return null;return {count:p.length,min:p[0],median:p.length%2?p[(p.length-1)/2]:(p[p.length/2-1]+p[p.length/2])/2,avg:p.reduce((a,b)=>a+b,0)/p.length}};
+const input=(name,label,value,type="number",extra="")=>'<div><label for="'+name+'">'+label+'</label><input id="'+name+'" data-field="'+name+'" type="'+type+'" '+(type==="number"?'min="0" step="any" ':'')+'value="'+clean(value)+'" '+extra+'></div>';
+function render(){
+qAll("#main-tabs .tab").forEach(b=>b.classList.toggle("active",b.dataset.page===state.page));
+el.innerHTML=state.page==="cost"?renderCost():renderCalc();
+}
+function qAll(s){return document.querySelectorAll(s)}
+function renderCost(){
+const records=state.items.filter(x=>x.status===state.section);
+return '<div class="subnav"><button class="tab '+(state.section==="selected"?"active":"")+'" data-section="selected">Отбираемые ('+state.items.filter(x=>x.status==="selected").length+')</button><button class="tab '+(state.section==="archive"?"active":"")+'" data-section="archive">Архив</button><button class="tab '+(state.section==="delivered"?"active":"")+'" data-section="delivered">Осуществлённые поставки ('+state.items.filter(x=>x.status==="delivered").length+')</button></div>'+
+'<section class="panel"><div class="row"><div><h2>Товары и себестоимость</h2><div class="muted">Цена 1688 в юанях × курс + логистика из Китая в рублях = себестоимость в рублях за единицу.</div></div><button class="btn" data-action="add">+ Добавить товар</button></div>'+
+'<div class="tablewrap"><table><thead><tr><th>Название / поисковый запрос</th><th>1688, ¥</th><th>Курс, ₽/¥</th><th>Логистика, ₽</th><th>Себестоимость</th><th>Действия</th></tr></thead><tbody>'+
+(records.length?records.map(x=>'<tr><td><input class="name" aria-label="Название" data-item="'+clean(x.id)+'" data-col="name" value="'+clean(x.name)+'"></td>'+
+['yuan','rate','logistics'].map(k=>'<td><input type="number" min="0" step="any" data-item="'+clean(x.id)+'" data-col="'+k+'" value="'+clean(x[k])+'"></td>').join("")+
+'<td class="highlight">'+money(itemCost(x))+'</td><td><div class="actions">'+(x.status!=="selected"?'<button class="btn secondary small" data-action="move" data-id="'+x.id+'" data-to="selected">В отбор</button>':'')+(x.status!=="archive"?'<button class="btn secondary small" data-action="move" data-id="'+x.id+'" data-to="archive">В архив</button>':'')+(x.status!=="delivered"?'<button class="btn secondary small" data-action="move" data-id="'+x.id+'" data-to="delivered">Поставка</button>':'')+'<button class="btn danger small" data-action="delete" data-id="'+x.id+'">Удалить</button></div></td></tr>').join(""):'<tr><td colspan="6" class="muted">Пока нет товаров в этом разделе. Добавьте первый товар.</td></tr>')+'</tbody></table></div></section>'+
+'<section class="panel"><h3>Как сохраняются данные</h3><div class="muted">Данные пока хранятся локально в этом браузере, не синхронизируются через GitHub и не являются облачной базой. Перед очисткой браузера экспортируйте резервную копию.</div><div class="actions" style="margin-top:14px"><button class="btn secondary" data-action="export">Скачать резервную копию JSON</button><label class="btn secondary" style="cursor:pointer">Импорт JSON <input type="file" accept="application/json,.json" id="import-file" style="display:none"></label></div></section>';
+}
+function renderCalc(){
+const item=activeItem(),market=state.market,cfg=state.config[market],a=analytics();
+const options=state.items.map(x=>'<option value="'+clean(x.id)+'" '+(item&&item.id===x.id?"selected":"")+'>'+clean(x.name||"Без названия")+' — '+money(itemCost(x))+'</option>').join("");
+return '<div class="subnav"><button class="tab '+(market==="wb"?"active":"")+'" data-market="wb">Wildberries</button><button class="tab '+(market==="ozon"?"active":"")+'" data-market="ozon">Ozon</button></div>'+
+'<section class="panel"><h2>Анализ товара</h2><div class="pricegrid"><div><label>Товар из списка себестоимости</label><select id="product-select">'+(options||'<option>Сначала добавьте товар</option>')+'</select></div><div><label>Поисковый запрос</label><input readonly value="'+clean(item?.name||"")+'"></div></div>'+
+'<div class="row" style="margin-top:14px"><span class="muted">Себестоимость: <b>'+money(item?itemCost(item):0)+'</b></span><a target="_blank" rel="noopener noreferrer" href="'+(market==="wb"?"https://www.wildberries.ru/catalog/0/search.aspx?search=":"https://www.ozon.ru/search/?text=")+encodeURIComponent(item?.name||"")+'">Открыть поиск '+(market==="wb"?"WB":"Ozon")+'</a></div>'+
+'<div class="notice"><b>Ввод цен конкурентов — вручную.</b> Подтверждённый официальный метод Seller API для получения ТОП-10 чужих товаров по произвольному поисковому запросу и их витринных цен не подключён. Введите цены первых 10 релевантных карточек из выбранной выдачи. Не смешивайте цены разных маркетплейсов.</div>'+
+'<div class="formgrid">'+Array.from({length:10},(_,i)=>input("p"+i,"Позиция "+(i+1)+" · цена покупателя, ₽",pricesFor()[i]??"")).join("")+'</div>'+
+'<div class="row" style="margin-top:15px"><span class="muted">Заполнено положительных цен: '+(a?.count||0)+' из 10</span><button class="btn secondary" data-action="clear-prices">Очистить цены</button></div></section>'+
+'<section class="panel"><h2>Расходы '+(market==="wb"?"Wildberries":"Ozon")+'</h2><div class="formgrid">'+input("commission","Комиссия, %",cfg.commission)+input("delivery","Логистика маркетплейса, ₽",cfg.delivery)+input("storage","Хранение на единицу, ₽",cfg.storage)+input("advertising","Реклама на продажу, ₽",cfg.advertising)+input("other","Прочие расходы, ₽",cfg.other)+input("tax","Налог с выручки, %",cfg.tax)+'</div><p class="muted">Комиссия и налог рассчитываются от оценочной цены продавца. Это упрощённая модель для оценки ниши, не замена фактическим тарифам и бухгалтерскому расчёту. Налог по умолчанию 6%.</p></section>'+
+'<section class="panel"><div class="row"><h2>Сценарии ТОП-10</h2><span class="muted">По цене покупателя: минимум / медиана / среднее</span></div><label for="spp">Предполагаемая скидка площадки (для WB — СПП), %</label><div class="range"><input id="spp" type="range" min="0" max="99" step="1" value="'+state.spp+'"><strong id="spp-value">'+state.spp+'%</strong></div>'+
+'<p class="muted">Скидка до 99%: при 100% нельзя математически восстановить цену продавца по цене покупателя (деление на ноль). Для Ozon это лишь гипотетическая скидка площадки, не подтверждённый аналог СПП WB.</p>'+
+'<div id="scenario-results">'+renderScenarios(a,item,cfg)+'</div></section>';
+}
+function renderScenarios(a,item,cfg){
+if(!a||!item)return '<div class="notice">Добавьте товар и хотя бы одну цену конкурента. Для корректного ТОП-10 заполните все 10 цен.</div>';
+const complete=a.count===10;
+const scenarios=[["Минимальная",a.min],["Медианная",a.median],["Средняя",a.avg]];
+return (!complete?'<div class="notice">Сейчас введено '+a.count+' из 10 цен. Статистики предварительные, это ещё не полный ТОП-10.</div>':'')+
+'<div class="metrics">'+scenarios.map(([name,buyer])=>{
+const seller=buyer/(1-state.spp/100),fee=seller*decimal(cfg.commission)/100,tax=seller*decimal(cfg.tax)/100,cost=itemCost(item),extra=decimal(cfg.delivery)+decimal(cfg.storage)+decimal(cfg.advertising)+decimal(cfg.other),profit=seller-fee-tax-extra-cost,margin=seller>0?profit/seller*100:0,roi=cost>0?profit/cost*100:0;
+return '<div class="metric"><span class="label">'+name+' цена из '+a.count+' позиций</span><strong>'+money(buyer)+'</strong><div class="detail">Цена продавца (оценка): <b>'+money(seller)+'</b></div><div class="detail">Себестоимость: '+money(cost)+'</div><div class="detail">Комиссия: −'+money(fee)+'</div><div class="detail">Налог: −'+money(tax)+'</div><div class="detail">Остальные расходы: −'+money(extra)+'</div><hr style="border:0;border-top:1px solid #dce3f5;margin:15px 0"><span class="label">Прибыль с единицы</span><strong class="'+(profit>=0?"good":"error")+'">'+money(profit)+'</strong><div class="detail">Маржинальность: <b>'+margin.toFixed(1)+'%</b> · ROI на себестоимость: <b>'+roi.toFixed(1)+'%</b></div></div>';
+}).join("")+'</div>';
+}
+document.addEventListener("click",e=>{
+const page=e.target.closest("[data-page]");if(page){state.page=page.dataset.page;persist();render();return}
+const section=e.target.closest("[data-section]");if(section){state.section=section.dataset.section;persist();render();return}
+const market=e.target.closest("[data-market]");if(market){state.market=market.dataset.market;persist();render();return}
+const btn=e.target.closest("[data-action]");if(!btn)return;
+const id=btn.dataset.id,action=btn.dataset.action;
+if(action==="add"){const x={id:crypto.randomUUID(),name:"Новый товар",yuan:0,rate:12,logistics:0,status:state.section==="selected"?"selected":state.section};state.items.push(x);state.selectedId=x.id}
+if(action==="move"){const x=state.items.find(x=>x.id===id);if(x)x.status=btn.dataset.to}
+if(action==="delete"){if(!confirm("Удалить товар и его цены конкурентов?"))return;state.items=state.items.filter(x=>x.id!==id);delete state.prices.wb[id];delete state.prices.ozon[id];if(state.selectedId===id)state.selectedId=state.items[0]?.id||""}
+if(action==="clear-prices"){const x=activeItem();if(x&&confirm("Удалить все 10 цен для этого товара на выбранной площадке?"))state.prices[state.market][x.id]=Array(10).fill("")}
+if(action==="export"){const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="market-calculate-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return}
+persist();render();
+});
+document.addEventListener("change",async e=>{
+const t=e.target;
+if(t.id==="import-file"&&t.files[0]){try{const data=JSON.parse(await t.files[0].text());if(!Array.isArray(data.items)||typeof data.config!=="object"||typeof data.prices!=="object")throw Error("Неверная структура");if(!confirm("Заменить все текущие данные импортированными?"))return;state={...structuredClone(initial),...data,config:{...structuredClone(initial.config),...data.config},prices:{...structuredClone(initial.prices),...data.prices}};persist();render()}catch(err){alert("Ошибка импорта: "+err.message)}return}
+if(t.id==="product-select"){state.selectedId=t.value;persist();render();return}
+if(t.dataset.item){const x=state.items.find(x=>x.id===t.dataset.item);if(x){x[t.dataset.col]=t.dataset.col==="name"?t.value:decimal(t.value);persist();render()}return}
+if(t.dataset.field){const key=t.dataset.field;if(key.startsWith("p")){const x=activeItem();if(x){const arr=[...pricesFor()];arr[Number(key.slice(1))]=t.value;state.prices[state.market][x.id]=arr}}else state.config[state.market][key]=decimal(t.value);persist();render()}
+});
+document.addEventListener("input",e=>{
+if(e.target.id==="spp"){state.spp=Number(e.target.value);q("#spp-value").textContent=state.spp+"%";q("#scenario-results").innerHTML=renderScenarios(analytics(),activeItem(),state.config[state.market]);persist()}
+});
+render();
+})();
+</script>
+</body></html>
