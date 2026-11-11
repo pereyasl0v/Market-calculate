@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
+import {parseWBCaptureText,normalizedQuery} from "../lib/wb-import.mjs";
 const KEY="market-calculate-react-v1";
 const empty={items:[],page:"items",section:"selected",selectedId:"",spp:20,prices:{},settings:{commission:25,delivery:95,storage:0,advertising:0,other:0,tax:6}};
 const n=x=>Math.max(0,Number(String(x??"").replace(",","."))||0);
@@ -35,10 +36,28 @@ export default function Calculator(){
    if(!prices.some(x=>n(x)>0))throw Error("WB не вернул распознанные цены");
    set({prices:{...s.prices,[item.id]:prices},products:{...(s.products||{}),[item.id]:json.products}});
    M("Получено "+json.products.length+" карточек из "+json.source+". Цены из JSON могут отличаться от цены на странице WB.");
-  }catch(e){M("Не удалось получить ТОП-10: "+e.message+". Можно заполнить цены вручную.")}finally{B(false)}
+  }catch(e){M("Серверный поиск недоступен: "+e.message+". Если WB возвращает HTTP 403, импортируйте HAR или JSON из своего браузера — это не зависит от доступа VPS к WB.")}finally{B(false)}
  }
  function exportData(){const blob=new Blob([JSON.stringify(s,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="market-calculate-backup.json";a.click();URL.revokeObjectURL(url)}
  async function importData(file){if(!file)return;try{const obj=JSON.parse(await file.text());if(!Array.isArray(obj.items)||!obj.prices)throw Error("Неверный формат");S({...empty,...obj,settings:{...empty.settings,...obj.settings}})}catch(e){M("Ошибка импорта: "+e.message)}}
+ async function importWBCapture(file){
+  if (!file || !item) {M("Сначала добавьте товар в разделе себестоимости.");return;}
+  if (file.size > 100 * 1024 * 1024) {M("Файл слишком большой (максимум 100 МБ).");return;}
+  try {
+    const result = parseWBCaptureText(await file.text(), item.name);
+    if (result.query && normalizedQuery(result.query) !== normalizedQuery(item.name)) {
+      if (!confirm("В файле запрос «"+result.query+"», а выбран товар «"+item.name+"». Использовать эти цены для выбранного товара?")) return;
+    }
+    const values = result.products.map(p=>p.price_rub??"").concat(Array(10).fill("")).slice(0,10);
+    if (!values.some(p=>n(p)>0)) throw Error("В сохранённой выдаче нет цен.");
+    set({
+      prices:{...s.prices,[item.id]:values},
+      products:{...(s.products||{}),[item.id]:result.products},
+      importedSources:{...(s.importedSources||{}),[item.id]:result.source}
+    });
+    M("Загружено "+result.products.length+" карточек: "+result.source+". HAR обработан только внутри браузера, на сервер не отправлялся. Цены из JSON могут отличаться от цены на витрине.");
+  } catch(e) {M("Не удалось импортировать: "+e.message);}
+ }
  const tabs=<div className="tabs"><button className={"btn "+(s.page==="items"?"selected":"secondary")} onClick={()=>set({page:"items"})}>Себестоимость</button><button className={"btn "+(s.page==="calc"?"selected":"secondary")} onClick={()=>set({page:"calc"})}>Калькулятор WB</button></div>;
  return <div className="wrap">{tabs}
  {s.page==="items"? <>
@@ -49,8 +68,8 @@ export default function Calculator(){
  </>:<>
  <section className="panel"><h2>Поиск ТОП-10 на Wildberries</h2>
  <div className="grid"><div className="field"><label>Выберите товар</label><select value={item?.id||""} onChange={e=>set({selectedId:e.target.value})}>{s.items.map(x=><option key={x.id} value={x.id}>{x.name} · {rub(cost(x))}</option>)}</select></div><div className="field"><label>Поисковый запрос</label><input value={item?.name||""} readOnly /></div></div>
- <p className="notice">Поиск работает через сервер FastAPI и внутренний, неофициальный JSON WB. Результат может изменяться в зависимости от региона, времени и алгоритма выдачи. По твоему HAR цена product в JSON (359 ₽) отличалась от цены в сохранённом HTML (348 ₽). Поэтому эти цены используются как ориентир, а не точная витринная цена или цена продавца. СПП конкурентов остаётся неизвестной.</p>
- <div className="actions"><button className="btn" disabled={!item||busy} onClick={find}>{busy?"Поиск...":"Получить ТОП-10"}</button>{item&&<a target="_blank" rel="noopener noreferrer" href={"https://www.wildberries.ru/catalog/0/search.aspx?search="+encodeURIComponent(item.name)}>Открыть выдачу WB</a>}</div>
+ <p className="notice">WB возвращает HTTP 403 на запросы с VPS. Поэтому рекомендуемый способ сейчас — импорт HAR из Network или JSON, сохранённого браузерным скриптом. Файл разбирается локально в твоём браузере, не загружается на FastAPI. Цена product в JSON может отличаться от цены на сайте; СПП конкурентов неизвестна.</p>
+ <div className="actions"><label className="btn" style={{cursor:"pointer"}}>Импорт HAR / JSON <input type="file" accept=".har,.json,application/json" hidden onChange={async e=>{await importWBCapture(e.target.files?.[0]);e.target.value="";}} /></label><button className="btn secondary" disabled={!item||busy} onClick={find}>{busy?"Поиск...":"Повторить через FastAPI (эксперимент)"}</button>{item&&<a target="_blank" rel="noopener noreferrer" href={"https://www.wildberries.ru/catalog/0/search.aspx?search="+encodeURIComponent(item.name)}>Открыть выдачу WB</a>}<a target="_blank" rel="noopener noreferrer" href="https://github.com/pereyasl0v/Market-calculate/blob/main/tools/wb-capture.user.js">Скрипт экспорта WB</a></div><p className="muted">Для HAR: открой поиск на WB, сохрани Network → Export HAR with content и импортируй файл здесь. HAR может содержать cookies и токены, не публикуй его. При импорте сохраняются только товары и цены.</p>
  {message&&<p role="status" className="muted">{message}</p>}
  {(s.products?.[item?.id]||[]).length>0&&<div className="scroll"><table><thead><tr><th>№</th><th>Карточка</th><th>product из JSON, ₽</th><th>basic из JSON, ₽</th></tr></thead><tbody>{s.products[item.id].map(p=><tr key={p.position}><td>{p.position}</td><td><a href={"https://www.wildberries.ru/catalog/"+encodeURIComponent(p.id)+"/detail.aspx"} target="_blank" rel="noopener noreferrer">{p.name}</a></td><td>{p.price_rub??"—"}</td><td>{p.basic_price_rub??"—"}</td></tr>)}</tbody></table></div>}
  <h3>Цены для расчёта (можно исправить вручную)</h3><div className="grid">{entries.map((v,i)=><Field key={i} label={"Позиция "+(i+1)+" · цена из JSON, ₽"} value={v} onChange={value=>{const a=[...entries];a[i]=value;set({prices:{...s.prices,[item.id]:a}})}}/>)}</div><p className="muted">Введено: {values.length} из 10. {values.length!==10?"Статистики предварительные до заполнения всех десяти цен.":""}</p>
