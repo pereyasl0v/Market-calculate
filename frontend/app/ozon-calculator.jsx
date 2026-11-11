@@ -143,7 +143,7 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
       <div className="field" style={{marginTop:16}}>
         <label>Модельное снижение цены относительно ПЦТ: {input.priceDiscountPct}%</label>
         <input type="range" min="0" max="90" step="1" value={input.priceDiscountPct} onChange={e=>updateInput({priceDiscountPct:Number(e.target.value)})}/>
-        <p className="muted">Это сценарное допущение: ПЦТ = цена на витрине ÷ (1 − процент). По нему рассчитывается Кп; это не измеренная скидка Ozon и не подтверждённый аналог СПП.</p>
+        <p className="muted">Это сценарное допущение: ПЦТ = цена на витрине ÷ (1 − процент). По нему рассчитывается Кп; это не измеренная скидка Ozon и не подтверждённый аналог СПП. В первой версии выручка продавца для начисления, эквайринга и налога принимается равной видимой цене продажи.</p>
       </div>
     </section>
 
@@ -152,7 +152,7 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
       {columns.length?<div className="scroll"><table><thead><tr><th>Статья расходов</th>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead><tbody>
         {rows.map(([label,getter,isExpense,suffix])=><tr key={label}><td><b>{label}</b></td>{columns.map(c=>{const value=getter(c.result);return <td key={c.key}>{suffix==="%"?value.toFixed(1)+"%":(isExpense&&value<0?"−":"")+rub2(Math.abs(value))}</td>})}</tr>)}
       </tbody></table></div>:<p className="notice">Импортируй или введи цены, чтобы увидеть минимальный, медианный и средний сценарии. Для точной статистики нужны все 10 карточек.</p>}
-      <p className="muted">«К начислению» — после удержаний Ozon, но до налога и себестоимости. «Итоговая прибыль» дополнительно вычитает налог и себестоимость. Резерв обратной логистики — ожидаемая оценка по указанной доле возвратов, а не обязательное списание с каждого заказа.</p>
+      <p className="muted">«К начислению» — видимая цена продажи минус удержания Ozon, до налога и себестоимости. В модели не предполагаются неизвестные субсидии Ozon продавцу. «Итоговая прибыль» дополнительно вычитает налог и себестоимость. Резерв обратной логистики — ожидаемая оценка по указанной доле возвратов, а не обязательное списание с каждого заказа.</p>
     </section>
   </div>;
 }
