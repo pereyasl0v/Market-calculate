@@ -53,7 +53,7 @@ export function calculateOzonScenario({ buyerPrice, cost = 0, settings = {}, sch
     : 0;
   // Official Ozon formula: max(ПЦТ × (ПП−Км) × 1%, ПЦТ × (ПП−Км−Кп)).
   const commission = Math.max(pctl * nominalRate * 0.01, pctl * Math.max(0, nominalRate - kp));
-  const acquiring = sellerPrice * clamp(s.acquiringPct, 0, 100) / 100;
+  const acquiring = buyer * clamp(s.acquiringPct, 0, 100) / 100;
   const handling = isFbs ? number(s.fbsHandling) : 0;
   const logisticsCap = isFbs ? number(s.fbsLogistics) : number(s.fboLogistics);
   const logistics = logisticsCap * (1 - kr);
@@ -64,8 +64,9 @@ export function calculateOzonScenario({ buyerPrice, cost = 0, settings = {}, sch
   const storage = number(s.storage);
   const other = isFbs ? number(s.fbsOther) : number(s.fboOther);
   const ozonCosts = commission + acquiring + handling + logistics + lastMile + reverseReserve + storage + other;
-  const payout = sellerPrice - ozonCosts;
-  const tax = sellerPrice * clamp(s.taxPct, 0, 100) / 100;
+  // Conservative assumption: the visible sale price is the seller revenue base unless a separate Ozon subsidy is known.
+  const payout = buyer - ozonCosts;
+  const tax = buyer * clamp(s.taxPct, 0, 100) / 100;
   const productCost = Math.max(0, number(cost));
   const profit = payout - tax - productCost;
 
