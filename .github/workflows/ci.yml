@@ -5,6 +5,8 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
+      - 'extension/**'
+      - 'docs/**'
       - '.github/workflows/ci.yml'
   pull_request:
     paths:
