@@ -35,6 +35,9 @@ jobs:
       - name: Install React app
         working-directory: frontend
         run: npm install --no-audit --no-fund
+      - name: Test HAR import in browser parser
+        working-directory: frontend
+        run: node --test lib/*.test.mjs
       - name: Build Next.js
         working-directory: frontend
         run: npm run build
