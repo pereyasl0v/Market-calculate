@@ -75,7 +75,8 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
   ]);
   const rows=[
     ["Цена на витрине",r=>r.buyerPrice,false],
-    ["Расчётная цена продавца",r=>r.sellerPrice,false],
+    ["Модельная ПЦТ",r=>r.pctl,false],
+    ["Кп по сценарию",r=>r.kpPct,false,"%"],
     ["Вознаграждение Ozon",r=>-r.commission,true],
     ["Эквайринг",r=>-r.acquiring,true],
     ["Обработка отправления",r=>-r.handling,true],
@@ -115,12 +116,14 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
 
     <section className="panel">
       <h2>Параметры тарифа и товара Ozon</h2>
-      <p className="muted">Ставки 23%, 1%, 29 ₽, 25 ₽ и 10 ₽ предварительно взяты из твоего XLSX-примера. Они не универсальны: проверь их для своей категории, маршрута, объёма и способа отгрузки.</p>
+      <p className="muted">Ставки 23%, 1%, 29 ₽, 25 ₽ и 10 ₽ предварительно взяты из твоего XLSX-примера. Комиссия рассчитывается по формуле Ozon через ПЦТ, ПП, Км и Кп. Проверь ставки для своей категории, маршрута, объёма и способа отгрузки.</p>
       <div className="grid">
         <TextField label="Категория Ozon" value={input.category} onChange={v=>updateInput({category:v})}/>
         <NumberField label="Объём товара, л" value={input.volumeL} onChange={v=>updateInput({volumeL:v})}/>
         <NumberField label="Вес товара, кг" value={input.weightKg} onChange={v=>updateInput({weightKg:v})}/>
-        <NumberField label="Вознаграждение Ozon, %" value={input.commissionPct} onChange={v=>updateInput({commissionPct:v})}/>
+        <NumberField label="Предельная ставка ПП, %" value={input.commissionPct} onChange={v=>updateInput({commissionPct:v})}/>
+        <NumberField label="Модификатор ставки Км, %" value={input.commissionModifierPct} onChange={v=>updateInput({commissionModifierPct:v})}/>
+        <NumberField label="Выплаты по механикам лояльности, ₽" value={input.loyaltyPayoutRub} onChange={v=>updateInput({loyaltyPayoutRub:v})}/>
         <NumberField label="Эквайринг банка, %" value={input.acquiringPct} onChange={v=>updateInput({acquiringPct:v})}/>
         <NumberField label="Логистика FBO, ₽" value={input.fboLogistics} onChange={v=>updateInput({fboLogistics:v})}/>
         <NumberField label="Логистика FBS, ₽" value={input.fbsLogistics} onChange={v=>updateInput({fbsLogistics:v})}/>
@@ -138,9 +141,9 @@ export default function OzonCalculator({items=[], selectedId="", onSelect=()=>{}
         <p className="muted">Применяется к введённым предельным тарифам логистики и доставки до места выдачи по формуле Ozon. Если введённые суммы уже фактические, оставь Кр = 0%.</p>
       </div>
       <div className="field" style={{marginTop:16}}>
-        <label>Модельная разница между ценой продавца и ценой на витрине: {input.priceDiscountPct}%</label>
+        <label>Модельное снижение цены относительно ПЦТ: {input.priceDiscountPct}%</label>
         <input type="range" min="0" max="90" step="1" value={input.priceDiscountPct} onChange={e=>updateInput({priceDiscountPct:Number(e.target.value)})}/>
-        <p className="muted">Это сценарное допущение: цена продавца = цена на витрине ÷ (1 − процент). Это не измеренная скидка Ozon и не подтверждённый аналог СПП.</p>
+        <p className="muted">Это сценарное допущение: ПЦТ = цена на витрине ÷ (1 − процент). По нему рассчитывается Кп; это не измеренная скидка Ozon и не подтверждённый аналог СПП.</p>
       </div>
     </section>
 
