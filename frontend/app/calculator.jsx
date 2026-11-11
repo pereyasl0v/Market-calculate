@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 import {parseWBCaptureText,normalizedQuery} from "../lib/wb-import.mjs";
+import OzonCalculator from "./ozon-calculator";
 const KEY="market-calculate-react-v1";
 const empty={items:[],page:"items",section:"selected",selectedId:"",spp:20,prices:{},settings:{commission:25,delivery:95,storage:0,advertising:0,other:0,tax:6}};
 const n=x=>Math.max(0,Number(String(x??"").replace(",","."))||0);
@@ -58,14 +59,14 @@ export default function Calculator(){
     M("Загружено "+result.products.length+" карточек: "+result.source+". HAR обработан только внутри браузера, на сервер не отправлялся. Цены из JSON могут отличаться от цены на витрине.");
   } catch(e) {M("Не удалось импортировать: "+e.message);}
  }
- const tabs=<div className="tabs"><button className={"btn "+(s.page==="items"?"selected":"secondary")} onClick={()=>set({page:"items"})}>Себестоимость</button><button className={"btn "+(s.page==="calc"?"selected":"secondary")} onClick={()=>set({page:"calc"})}>Калькулятор WB</button></div>;
+ const tabs=<div className="tabs"><button className={"btn "+(s.page==="items"?"selected":"secondary")} onClick={()=>set({page:"items"})}>Себестоимость</button><button className={"btn "+(s.page==="calc"?"selected":"secondary")} onClick={()=>set({page:"calc"})}>Калькулятор WB</button><button className={"btn "+(s.page==="ozon"?"selected":"secondary")} onClick={()=>set({page:"ozon"})}>Калькулятор Ozon</button></div>;
  return <div className="wrap">{tabs}
  {s.page==="items"? <>
  <div className="tabs">{[["selected","Отбираемые"],["archive","Архив"],["delivered","Осуществлённые поставки"]].map(([k,v])=><button key={k} className={"btn "+(s.section===k?"selected":"secondary")} onClick={()=>set({section:k})}>{v}</button>)}</div>
  <section className="panel"><div className="flex space"><h2>Себестоимость 1688</h2><button className="btn" onClick={()=>{const id=crypto.randomUUID();set({items:[...s.items,{id,name:"Новый товар",yuan:0,rate:12,freight:0,status:s.section}],selectedId:id})}}>+ Добавить товар</button></div>
  <p className="muted">Цена в юанях × курс руб./юань + доставка из Китая в рублях.</p><div className="scroll"><table><thead><tr><th>Название для поиска</th><th>1688, ¥</th><th>Курс, ₽/¥</th><th>Логистика, ₽</th><th>Итого, ₽</th><th>Действия</th></tr></thead><tbody>{s.items.filter(x=>x.status===s.section).map(x=><tr key={x.id}><td><input aria-label="Название" value={x.name} onChange={e=>update(x.id,{name:e.target.value})}/></td>{["yuan","rate","freight"].map(k=><td key={k}><input aria-label={k} type="number" min="0" value={x[k]} onChange={e=>update(x.id,{[k]:e.target.value})}/></td>)}<td><b>{rub(cost(x))}</b></td><td><select aria-label="Статус" value={x.status} onChange={e=>update(x.id,{status:e.target.value})}>{[["selected","Отбираемые"],["archive","Архив"],["delivered","Поставка"]].map(([a,b])=><option value={a} key={a}>{b}</option>)}</select><button className="btn secondary" onClick={()=>{if(confirm("Удалить товар?"))set({items:s.items.filter(y=>y.id!==x.id)})}}>Удалить</button></td></tr>)}{!s.items.some(x=>x.status===s.section)&&<tr><td colSpan="6">Здесь пока нет товаров.</td></tr>}</tbody></table></div></section>
  <div className="panel"><div className="actions"><button className="btn secondary" onClick={exportData}>Экспорт JSON</button><label className="btn secondary" style={{cursor:"pointer"}}>Импорт JSON <input type="file" accept=".json" hidden onChange={e=>importData(e.target.files?.[0])}/></label></div><p className="muted">Данные пока сохраняются в браузере. Для переноса на другой телефон экспортируйте JSON.</p></div>
- </>:<>
+ </>:s.page==="ozon"?<OzonCalculator items={s.items} selectedId={s.selectedId} onSelect={id=>set({selectedId:id})}/>:<>
  <section className="panel"><h2>Поиск ТОП-10 на Wildberries</h2>
  <div className="grid"><div className="field"><label>Выберите товар</label><select value={item?.id||""} onChange={e=>set({selectedId:e.target.value})}>{s.items.map(x=><option key={x.id} value={x.id}>{x.name} · {rub(cost(x))}</option>)}</select></div><div className="field"><label>Поисковый запрос</label><input value={item?.name||""} readOnly /></div></div>
  <p className="notice">WB возвращает HTTP 403 на запросы с VPS. Поэтому рекомендуемый способ сейчас — импорт HAR из Network или JSON, сохранённого браузерным скриптом. Файл разбирается локально в твоём браузере, не загружается на FastAPI. Цена product в JSON может отличаться от цены на сайте; СПП конкурентов неизвестна.</p>
