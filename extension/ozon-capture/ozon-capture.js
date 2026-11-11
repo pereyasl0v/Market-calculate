@@ -82,7 +82,8 @@
     if (!button) return;
     const query = queryFromUrl();
     button.disabled = !query;
-    button.textContent = query ? "↓ Сохранить ТОП-10 Ozon" : "Откройте поиск Ozon";
+    const label = query ? "↓ Сохранить ТОП-10 Ozon" : "Откройте поиск Ozon";
+    if (button.textContent !== label) button.textContent = label;
   }
 
   function ensureButton() {
